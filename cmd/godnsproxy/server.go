@@ -15,10 +15,11 @@ func run() error {
 		return err
 	}
 	hooks = append(hooks, &routeros.Hook{
-		Address:  cfg.routerosAddress,
-		Username: cfg.routerosUsername,
-		Password: cfg.routerosPassword,
-		GraceTTL: cfg.graceTTL,
+		Address:        cfg.routerosAddress,
+		Username:       cfg.routerosUsername,
+		Password:       cfg.routerosPassword,
+		GraceTTL:       cfg.graceTTL,
+		PropagateDelay: cfg.propagateDelay,
 	})
 	runHookDaemons()
 	mux := dns.NewServeMux()

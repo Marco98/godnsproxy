@@ -16,6 +16,7 @@ type cli struct {
 	mode             string
 	port             uint
 	graceTTL         uint
+	propagateDelay   uint
 	forwarders       string
 	routerosAddress  string
 	routerosUsername string
@@ -26,6 +27,7 @@ type config struct {
 	mode             string
 	port             uint16
 	graceTTL         uint
+	propagateDelay   uint
 	forwarders       []string
 	routerosAddress  string
 	routerosUsername string
@@ -45,6 +47,7 @@ func parseConfig() (config, error) {
 	flag.StringVar(&cli.mode, "m", "direct", "forwarding mode (direct/tproxy)")
 	flag.UintVar(&cli.port, "p", 53, "listen port")
 	flag.UintVar(&cli.graceTTL, "gttl", 0, "grace ttl")
+	flag.UintVar(&cli.propagateDelay, "pdel", 15, "propagate delay (ms)")
 	flag.StringVar(&cli.forwarders, "f", "", "comma-seperated forwarders")
 	flag.StringVar(&cli.routerosAddress, "rosaddr", "", "routeros api address")
 	flag.StringVar(&cli.routerosUsername, "rosuser", "", "routeros username")
@@ -115,5 +118,6 @@ func (cli cli) makeConfig() (config, bool) {
 		}
 	}
 	cfg.graceTTL = cli.graceTTL
+	cfg.propagateDelay = cli.propagateDelay
 	return cfg, valid
 }

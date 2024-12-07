@@ -13,17 +13,19 @@ import (
 )
 
 type Hook struct {
-	Address    string
-	Username   string
-	Password   string
-	GraceTTL   uint
-	client     *routeros.Client
-	matchFqdns []string
-	cache      map[string]time.Time
-	cacheLock  sync.RWMutex
+	Address        string
+	Username       string
+	Password       string
+	GraceTTL       uint
+	PropagateDelay uint
+	client         *routeros.Client
+	matchFqdns     []string
+	cache          map[string]time.Time
+	cacheLock      sync.RWMutex
 }
 
 func (h *Hook) Hook(resp *dns.Msg) {
+	hadEffect := false
 	for _, v := range resp.Answer {
 		if v.Header().Rrtype != dns.TypeA {
 			return
@@ -33,11 +35,18 @@ func (h *Hook) Hook(resp *dns.Msg) {
 		name := strings.TrimSuffix(va.Hdr.Name, ".")
 		for _, fqdn := range h.matchFqdns {
 			if fqdn == name {
-				h.addAddressList(fqdn, va.A.String(), nttl)
+				if h.addAddressList(fqdn, va.A.String(), nttl) {
+					hadEffect = true
+				}
 			} else if strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(name, strings.TrimPrefix(fqdn, "*")) {
-				h.addAddressList(fqdn, va.A.String(), nttl)
+				if h.addAddressList(fqdn, va.A.String(), nttl) {
+					hadEffect = true
+				}
 			}
 		}
+	}
+	if hadEffect {
+		time.Sleep(time.Duration(h.PropagateDelay) * time.Millisecond) //nolint:gosec
 	}
 }
 
@@ -93,14 +102,14 @@ func (h *Hook) getClient() (*routeros.Client, error) {
 	return c, nil
 }
 
-func (h *Hook) addAddressList(name, ip string, ttl uint) {
+func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 	if h.cacheExists(name, ip) {
-		return
+		return false
 	}
 	c, err := h.getClient()
 	if err != nil {
 		slog.Error("error getting client", "err", err)
-		return
+		return false
 	}
 	slog.Debug("adding rec", "name", name, "ip", ip, "ttl", ttl)
 	_, err = c.Run(
@@ -112,9 +121,10 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) {
 	)
 	if err != nil && !strings.Contains(err.Error(), "already have such entry") {
 		slog.Error("error adding rec", "err", err)
-		return
+		return false
 	}
 	h.cacheSet(name, ip, ttl)
+	return true
 }
 
 func (h *Hook) cacheExists(name, ip string) bool {

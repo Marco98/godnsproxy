@@ -33,9 +33,9 @@ func (h *Hook) Hook(resp *dns.Msg) {
 		name := strings.TrimSuffix(va.Hdr.Name, ".")
 		for _, fqdn := range h.matchFqdns {
 			if fqdn == name {
-				h.addAddressList(name, va.A.String(), nttl)
+				h.addAddressList(fqdn, va.A.String(), nttl)
 			} else if strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(name, strings.TrimPrefix(fqdn, "*")) {
-				h.addAddressList(name, va.A.String(), nttl)
+				h.addAddressList(fqdn, va.A.String(), nttl)
 			}
 		}
 	}

@@ -85,7 +85,7 @@ func (h *Hook) getClient() (*routeros.Client, error) {
 	if h.client != nil {
 		return h.client, nil
 	}
-	c, err := routeros.Dial(h.Address, h.Username, h.Password)
+	c, err := routeros.DialTimeout(h.Address, h.Username, h.Password, 3*time.Second)
 	if err != nil {
 		return nil, err
 	}

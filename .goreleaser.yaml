@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+builds:
+  - main: ./cmd/godnsproxy
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+release:
+  prerelease: auto
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+upx:
+  - enabled: true
+    goos: [linux]
+    compress: best
+    lzma: true
+dockers:
+  - dockerfile: Containerfile
+    image_templates:
+      - "ghcr.io/marco98/godnsproxy:{{ .Major }}"
+      - "ghcr.io/marco98/godnsproxy:{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/marco98/godnsproxy:{{ .Major }}.{{ .Minor }}.{{ .Patch }}"
+      - "ghcr.io/marco98/godnsproxy:latest"
+nfpms:
+  - maintainer: Marco98
+    description: "dns proxy to create dynamic firewall rules"
+    homepage: https://github.com/Marco98/godnsproxy
+    license: MIT
+    formats:
+      - deb
+      - rpm

@@ -48,7 +48,7 @@ dockers:
       - "ghcr.io/marco98/godnsproxy:latest"
 nfpms:
   - maintainer: Marco98
-    description: "dns proxy to create dynamic firewall rules"
+    description: "[WIP] Simple DNS-proxy to forward A-records to firewall rulesets synchronous"
     homepage: https://github.com/Marco98/godnsproxy
     license: MIT
     formats:

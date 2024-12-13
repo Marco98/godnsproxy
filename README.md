@@ -106,7 +106,7 @@ sleep 3s && \
 ssh $ROUTER_SSH /container remove \[find comment=godnsproxy\] && \
 ssh $ROUTER_SSH /container add \
 interface=veth-proxy logging=yes start-on-boot=yes comment=godnsproxy file=godnsproxy.tar \
-cmd=\"-rosaddr 172.31.15.1:8728 -rosuser $ROUTER_APIUSER -rospass $ROUTER_APIPASS -f 1.1.1.1,1.0.0.1\" && \
-ssh $ROUTER_SSH /container start \[find comment=godnsproxy\]
+cmd=\"-rosaddr 172.31.15.1:8728 -rosuser $ROUTER_APIUSER -rospass $ROUTER_APIPASS -f 1.1.1.1,1.0.0.1 -l warn\" && \
+ssh $ROUTER_SSH /container start \[find comment=godnsproxy\] && \
 ssh $ROUTER_SSH /file remove godnsproxy.tar
 ```

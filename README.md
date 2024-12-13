@@ -5,7 +5,7 @@
 ## Features / Ideas
 
 - [x] DNS-based firewall rules
-  - [x] RouterOS (Mikrotik)
+  - [x] RouterOS (Mikrotik) - i will only support ROSv7
   - [ ] nftables (Linux)
 - [ ] DNS A-record NAT rules
 - [ ] DNS filter lists

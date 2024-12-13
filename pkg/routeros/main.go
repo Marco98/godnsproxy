@@ -88,7 +88,7 @@ func (h *Hook) Daemon() {
 			}
 			fqdns = append(fqdns, fqdn)
 		}
-		slog.Debug("fetched matchFqdns from firewall", "count", len(fqdns))
+		slog.Debug("fetched matchFqdns from firewall", "count", len(fqdns), "list", fqdns)
 		h.matchFqdns = fqdns
 	}
 }

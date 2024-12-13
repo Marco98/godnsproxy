@@ -111,7 +111,7 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 		slog.Error("error getting client", "err", err)
 		return false
 	}
-	slog.Debug("adding rec", "name", name, "ip", ip, "ttl", ttl)
+	slog.Info("adding rec", "name", name, "ip", ip, "ttl", ttl)
 	_, err = c.Run(
 		"/ip/firewall/address-list/add",
 		"dynamic=yes",

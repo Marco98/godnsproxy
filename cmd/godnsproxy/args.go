@@ -41,18 +41,23 @@ var logLevels = map[string]slog.Level{
 	"error": slog.LevelError,
 }
 
-func parseConfig() (config, error) {
-	cli, cfg := cli{}, config{}
+func getCliParams() cli {
+	cli := cli{}
 	flag.StringVar(&cli.logLevel, "l", "info", "log level (debug/info/warn/error)")
 	flag.StringVar(&cli.mode, "m", "direct", "forwarding mode (direct/tproxy)")
 	flag.UintVar(&cli.port, "p", 53, "listen port")
-	flag.UintVar(&cli.graceTTL, "gttl", 0, "grace ttl")
-	flag.UintVar(&cli.propagateDelay, "pdel", 15, "propagate delay (ms)")
-	flag.StringVar(&cli.forwarders, "f", "", "comma-seperated forwarders")
+	flag.UintVar(&cli.graceTTL, "gttl", 1, "grace ttl (default 1)")
+	flag.UintVar(&cli.propagateDelay, "pdel", 100, "propagate delay (ms)")
+	flag.StringVar(&cli.forwarders, "f", "", "comma-separated forwarders")
 	flag.StringVar(&cli.routerosAddress, "rosaddr", "", "routeros api address")
 	flag.StringVar(&cli.routerosUsername, "rosuser", "", "routeros username")
 	flag.StringVar(&cli.routerosPassword, "rospass", "", "routeros password")
 	flag.Parse()
+	return cli
+}
+
+func parseConfig() (config, error) {
+	cli, cfg := getCliParams(), config{}
 	slogLevel, ok := logLevels[strings.ToLower(cli.logLevel)]
 	if !ok {
 		return cfg, fmt.Errorf("invalid loglevel: %s", cli.logLevel)

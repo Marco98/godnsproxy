@@ -42,7 +42,7 @@ func handleDNSRequest(cfg config) func(w dns.ResponseWriter, r *dns.Msg) {
 	return func(w dns.ResponseWriter, r *dns.Msg) {
 		var resp *dns.Msg
 		var err error
-		log := slog.With()
+		log := slog.With("client", w.RemoteAddr().String())
 		if len(r.Question) > 0 {
 			log = log.With("rname", r.Question[0].Name)
 			log.Debug("rx dns req")

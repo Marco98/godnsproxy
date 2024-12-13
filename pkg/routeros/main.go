@@ -151,12 +151,46 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 		fmt.Sprintf("=timeout=%d", ttl),
 	)
 	h.clientLock.Unlock()
-	if err != nil && !strings.Contains(err.Error(), "already have such entry") {
-		slog.Error("error adding rec", "err", err)
+	if err != nil {
+		if strings.Contains(err.Error(), "already have such entry") {
+			if err := h.refreshAddressList(name, ip, ttl); err != nil {
+				slog.Error("error refreshing rec", "err", err)
+			}
+		} else {
+			slog.Error("error adding rec", "err", err)
+		}
 		return false
 	}
 	h.cacheSet(name, ip, ttl)
 	return true
+}
+
+func (h *Hook) refreshAddressList(name, ip string, ttl uint) error {
+	c, err := h.getClient()
+	if err != nil {
+		return err
+	}
+	h.clientLock.Lock()
+	res, err := c.Run(
+		"/ip/firewall/address-list/print",
+		fmt.Sprintf("?address=%s", ip),
+		fmt.Sprintf("?list=%s", name),
+		"?dynamic=yes",
+		"=.proplist=.id",
+	)
+	h.clientLock.Unlock()
+	if err != nil {
+		return err
+	}
+	h.clientLock.Lock()
+	_, err = c.Run(
+		"/ip/firewall/address-list/set",
+		fmt.Sprintf("=.id=%s", res.Re[0].Map[".id"]),
+		fmt.Sprintf("=timeout=%d", ttl),
+	)
+	h.clientLock.Unlock()
+	slog.Debug("refreshed rec", "name", name, "ip", ip, "ttl", ttl)
+	return err
 }
 
 func (h *Hook) cacheExists(name, ip string) bool {
@@ -175,5 +209,5 @@ func (h *Hook) cacheSet(name, ip string, ttl uint) {
 	if h.cache == nil {
 		h.cache = make(map[string]time.Time)
 	}
-	h.cache[fmt.Sprintf("%s|%s", name, ip)] = time.Now().Add(time.Duration(ttl) * time.Second) // nolint:gosec
+	h.cache[fmt.Sprintf("%s|%s", name, ip)] = time.Now().Add(time.Duration(ttl-h.GraceTTL) * time.Second) // nolint:gosec
 }

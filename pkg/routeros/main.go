@@ -72,45 +72,52 @@ func (h *Hook) Hook(resp *dns.Msg) {
 }
 
 func (h *Hook) Daemon() {
-	first := true
-	for {
-		if !first {
-			time.Sleep(5 * time.Second)
+	h.clientLock.Lock()
+	if c, err := h.getClient(); err == nil {
+		if _, err := c.Run("/ip/dns/cache/flush"); err != nil {
+			slog.Error("error flushing dns cache")
 		}
-		first = false
-		c, err := h.getClient()
-		if err != nil {
-			slog.Error("error getting client", "err", err)
-			continue
-		}
-		h.clientLock.Lock()
-		resp, err := c.Run(
-			"/ip/firewall/filter/print",
-			"?disabled=false",
-			"?dst-address-list",
-			"=.proplist=dst-address-list",
-		)
-		h.clientLock.Unlock()
-		if err != nil {
-			slog.Error("error fetching rules", "err", err)
-			continue
-		}
-		fqdns := make([]string, 0)
-		for _, v := range resp.Re {
-			fqdn := v.Map["dst-address-list"]
-			isWC := strings.HasPrefix(fqdn, "*.")
-			fqdn, err = idna.Lookup.ToASCII(strings.TrimPrefix(fqdn, "*."))
-			if err != nil {
-				continue
-			}
-			if isWC {
-				fqdn = fmt.Sprintf("*.%s", fqdn)
-			}
-			fqdns = append(fqdns, fqdn)
-		}
-		slog.Debug("fetched matchFqdns from firewall", "count", len(fqdns), "list", fqdns)
-		h.matchFqdns = fqdns
 	}
+	h.clientLock.Unlock()
+	for {
+		h.updateMatchFqdns()
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (h *Hook) updateMatchFqdns() {
+	c, err := h.getClient()
+	if err != nil {
+		slog.Error("error getting client", "err", err)
+		return
+	}
+	h.clientLock.Lock()
+	resp, err := c.Run(
+		"/ip/firewall/filter/print",
+		"?disabled=false",
+		"?dst-address-list",
+		"=.proplist=dst-address-list",
+	)
+	h.clientLock.Unlock()
+	if err != nil {
+		slog.Error("error fetching rules", "err", err)
+		return
+	}
+	fqdns := make([]string, 0)
+	for _, v := range resp.Re {
+		fqdn := v.Map["dst-address-list"]
+		isWC := strings.HasPrefix(fqdn, "*.")
+		fqdn, err = idna.Lookup.ToASCII(strings.TrimPrefix(fqdn, "*."))
+		if err != nil {
+			continue
+		}
+		if isWC {
+			fqdn = fmt.Sprintf("*.%s", fqdn)
+		}
+		fqdns = append(fqdns, fqdn)
+	}
+	slog.Debug("fetched matchFqdns from firewall", "count", len(fqdns), "list", fqdns)
+	h.matchFqdns = fqdns
 }
 
 func (h *Hook) getClient() (*routeros.Client, error) {

@@ -19,6 +19,7 @@ type Hook struct {
 	GraceTTL       uint
 	PropagateDelay uint
 	client         *routeros.Client
+	clientLock     sync.Mutex
 	matchFqdns     []string
 	cache          map[string]time.Time
 	cacheLock      sync.RWMutex
@@ -62,12 +63,14 @@ func (h *Hook) Daemon() {
 			slog.Error("error getting client", "err", err)
 			continue
 		}
+		h.clientLock.Lock()
 		resp, err := c.Run(
 			"/ip/firewall/filter/print",
 			"?disabled=false",
 			"?dst-address-list",
 			"=.proplist=dst-address-list",
 		)
+		h.clientLock.Unlock()
 		if err != nil {
 			slog.Error("error fetching rules", "err", err)
 			continue
@@ -112,6 +115,7 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 		return false
 	}
 	slog.Info("adding rec", "name", name, "ip", ip, "ttl", ttl)
+	h.clientLock.Lock()
 	_, err = c.Run(
 		"/ip/firewall/address-list/add",
 		"dynamic=yes",
@@ -119,6 +123,7 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 		fmt.Sprintf("=address=%s", ip),
 		fmt.Sprintf("=timeout=%d", ttl),
 	)
+	h.clientLock.Unlock()
 	if err != nil && !strings.Contains(err.Error(), "already have such entry") {
 		slog.Error("error adding rec", "err", err)
 		return false

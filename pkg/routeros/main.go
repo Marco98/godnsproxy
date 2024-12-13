@@ -26,20 +26,40 @@ type Hook struct {
 }
 
 func (h *Hook) Hook(resp *dns.Msg) {
+	// Handle CNAMEs
+	cnames := make(map[string]string)
+	for _, v := range resp.Answer {
+		if v.Header().Rrtype != dns.TypeCNAME {
+			continue
+		}
+		cname, ok := v.(*dns.CNAME)
+		if !ok {
+			continue
+		}
+		cnames[strings.TrimSuffix(cname.Target, ".")] = strings.TrimSuffix(cname.Hdr.Name, ".")
+	}
+	// Handle A-Records
 	hadEffect := false
 	for _, v := range resp.Answer {
 		if v.Header().Rrtype != dns.TypeA {
-			return
+			continue
 		}
-		va := v.(*dns.A)
+		va, ok := v.(*dns.A)
+		if !ok {
+			continue
+		}
 		nttl := uint(va.Hdr.Ttl) + h.GraceTTL
 		name := strings.TrimSuffix(va.Hdr.Name, ".")
 		for _, fqdn := range h.matchFqdns {
-			if fqdn == name {
+			// Direct match
+			if fqdn == name || (strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(name, strings.TrimPrefix(fqdn, "*"))) {
 				if h.addAddressList(fqdn, va.A.String(), nttl) {
 					hadEffect = true
 				}
-			} else if strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(name, strings.TrimPrefix(fqdn, "*")) {
+			}
+			// CNAME match
+			cn, ok := cnames[name]
+			if ok && fqdn == cn || (strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(cn, strings.TrimPrefix(fqdn, "*"))) {
 				if h.addAddressList(fqdn, va.A.String(), nttl) {
 					hadEffect = true
 				}

@@ -1,6 +1,7 @@
 package routeros
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/miekg/dns"
 	"golang.org/x/net/idna"
 )
+
+var errRosAddressNotFound = errors.New("no existing address-list record found")
 
 type Hook struct {
 	Address        string
@@ -136,25 +139,16 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 	if h.cacheExists(name, ip) {
 		return false
 	}
-	c, err := h.getClient()
-	if err != nil {
-		slog.Error("error getting client", "err", err)
-		return false
-	}
-	slog.Info("adding rec", "name", name, "ip", ip, "ttl", ttl)
-	h.clientLock.Lock()
-	_, err = c.Run(
-		"/ip/firewall/address-list/add",
-		"dynamic=yes",
-		fmt.Sprintf("=list=%s", name),
-		fmt.Sprintf("=address=%s", ip),
-		fmt.Sprintf("=timeout=%d", ttl),
-	)
-	h.clientLock.Unlock()
-	if err != nil {
+	if err := h.addAddressListRecord(name, ip, ttl); err != nil {
 		if strings.Contains(err.Error(), "already have such entry") {
 			if err := h.refreshAddressList(name, ip, ttl); err != nil {
-				slog.Error("error refreshing rec", "err", err)
+				if errors.Is(err, errRosAddressNotFound) {
+					if err := h.addAddressListRecord(name, ip, ttl); err != nil {
+						slog.Error("error adding rec", "err", err)
+					}
+				} else {
+					slog.Error("error refreshing rec", "err", err)
+				}
 			}
 		} else {
 			slog.Error("error adding rec", "err", err)
@@ -163,6 +157,27 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 	}
 	h.cacheSet(name, ip, ttl)
 	return true
+}
+
+func (h *Hook) addAddressListRecord(name, ip string, ttl uint) error {
+	c, err := h.getClient()
+	if err != nil {
+		return fmt.Errorf("error getting client: %w", err)
+	}
+	h.clientLock.Lock()
+	defer h.clientLock.Unlock()
+	_, err = c.Run(
+		"/ip/firewall/address-list/add",
+		"dynamic=yes",
+		fmt.Sprintf("=list=%s", name),
+		fmt.Sprintf("=address=%s", ip),
+		fmt.Sprintf("=timeout=%d", ttl),
+	)
+	if err != nil {
+		return err
+	}
+	slog.Info("address-list added", "name", name, "ip", ip, "ttl", ttl)
+	return nil
 }
 
 func (h *Hook) refreshAddressList(name, ip string, ttl uint) error {
@@ -182,6 +197,9 @@ func (h *Hook) refreshAddressList(name, ip string, ttl uint) error {
 	if err != nil {
 		return err
 	}
+	if len(res.Re) < 1 {
+		return errRosAddressNotFound
+	}
 	h.clientLock.Lock()
 	_, err = c.Run(
 		"/ip/firewall/address-list/set",
@@ -189,7 +207,7 @@ func (h *Hook) refreshAddressList(name, ip string, ttl uint) error {
 		fmt.Sprintf("=timeout=%d", ttl),
 	)
 	h.clientLock.Unlock()
-	slog.Debug("refreshed rec", "name", name, "ip", ip, "ttl", ttl)
+	slog.Debug("address-list record refreshed", "name", name, "ip", ip, "ttl", ttl)
 	return err
 }
 

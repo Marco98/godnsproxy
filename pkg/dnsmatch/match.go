@@ -2,6 +2,7 @@ package dnsmatch
 
 import (
 	"net"
+	"slices"
 	"strings"
 
 	"github.com/miekg/dns"
@@ -60,8 +61,13 @@ func MatchDNS(answer []dns.RR, matchFqdns []string) []MatchResult {
 }
 
 func resolveCname(cnames map[string]string, a, matchFqdn string) bool {
+	past := []string{a}
 	cn, ok := cnames[a]
 	for ok {
+		// break on loop
+		if slices.Contains(past, cn) {
+			break
+		}
 		// direct match
 		if cn == matchFqdn {
 			return true
@@ -71,6 +77,7 @@ func resolveCname(cnames map[string]string, a, matchFqdn string) bool {
 			return true
 		}
 		// recursive search
+		past = append(past, cn)
 		cn, ok = cnames[cn]
 	}
 	return false

@@ -152,6 +152,35 @@ func TestMatching(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:       "Nested CNAME Infinite Loop",
+			matchFqdns: []string{"www.google.com"},
+			answer: []dns.RR{
+				&dns.CNAME{
+					Hdr: dns.RR_Header{
+						Rrtype: dns.TypeCNAME,
+						Name:   "cname2.google.com.",
+					},
+					Target: "cname1.google.com.",
+				},
+				&dns.CNAME{
+					Hdr: dns.RR_Header{
+						Rrtype: dns.TypeCNAME,
+						Name:   "cname1.google.com.",
+					},
+					Target: "cname2.google.com.",
+				},
+				&dns.A{
+					Hdr: dns.RR_Header{
+						Rrtype: dns.TypeA,
+						Name:   "cname2.google.com.",
+						Ttl:    300,
+					},
+					A: net.IPv4(123, 123, 123, 123),
+				},
+			},
+			results: []dnsmatch.MatchResult{},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

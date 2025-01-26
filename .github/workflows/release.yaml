@@ -1,10 +1,11 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: release
+name: Make Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["Run Tests"]
+    types: ["completed"]
+    tags: "v*"
 
 permissions:
   contents: write
@@ -23,9 +24,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-
-      - name: Run Go Tests
-        run: go test ./...
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3

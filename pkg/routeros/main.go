@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Marco98/godnsproxy/pkg/dnsmatch"
 	routeros "github.com/go-routeros/routeros/v3"
 	"github.com/miekg/dns"
 	"golang.org/x/net/idna"
@@ -29,44 +30,10 @@ type Hook struct {
 }
 
 func (h *Hook) Hook(resp *dns.Msg) {
-	// Handle CNAMEs
-	cnames := make(map[string]string)
-	for _, v := range resp.Answer {
-		if v.Header().Rrtype != dns.TypeCNAME {
-			continue
-		}
-		cname, ok := v.(*dns.CNAME)
-		if !ok {
-			continue
-		}
-		cnames[strings.TrimSuffix(cname.Target, ".")] = strings.TrimSuffix(cname.Hdr.Name, ".")
-	}
-	// Handle A-Records
 	hadEffect := false
-	for _, v := range resp.Answer {
-		if v.Header().Rrtype != dns.TypeA {
-			continue
-		}
-		va, ok := v.(*dns.A)
-		if !ok {
-			continue
-		}
-		nttl := uint(va.Hdr.Ttl) + h.GraceTTL
-		name := strings.TrimSuffix(va.Hdr.Name, ".")
-		for _, fqdn := range h.matchFqdns {
-			// Direct match
-			if fqdn == name || (strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(name, strings.TrimPrefix(fqdn, "*"))) {
-				if h.addAddressList(fqdn, va.A.String(), nttl) {
-					hadEffect = true
-				}
-			}
-			// CNAME match
-			cn, ok := cnames[name]
-			if ok && fqdn == cn || (strings.HasPrefix(fqdn, "*.") && strings.HasSuffix(cn, strings.TrimPrefix(fqdn, "*"))) {
-				if h.addAddressList(fqdn, va.A.String(), nttl) {
-					hadEffect = true
-				}
-			}
+	for _, v := range dnsmatch.MatchDNS(resp.Answer, h.matchFqdns) {
+		if h.addAddressList(v.Fqdn, v.IPAddress.String(), uint(v.TTL)+h.GraceTTL) {
+			hadEffect = true
 		}
 	}
 	if hadEffect {

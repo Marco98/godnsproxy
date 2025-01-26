@@ -7,6 +7,7 @@
 - [x] DNS-based firewall rules
   - [x] RouterOS (Mikrotik) - i will only support ROSv7
   - [ ] nftables (Linux)
+  - [ ] kubernetes (in the stars...)
 - [ ] DNS A-record NAT rules
 - [ ] DNS filter lists
 

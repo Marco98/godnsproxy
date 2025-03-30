@@ -51,6 +51,7 @@ func (h *Hook) Daemon() {
 	h.clientLock.Unlock()
 	for {
 		h.updateMatchFqdns()
+		h.cachePurge()
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -195,4 +196,15 @@ func (h *Hook) cacheSet(name, ip string, ttl uint) {
 		h.cache = make(map[string]time.Time)
 	}
 	h.cache[fmt.Sprintf("%s|%s", name, ip)] = time.Now().Add(time.Duration(ttl-h.GraceTTL) * time.Second) // nolint:gosec
+}
+
+func (h *Hook) cachePurge() {
+	h.cacheLock.RLock()
+	defer h.cacheLock.RUnlock()
+	now := time.Now()
+	for k, v := range h.cache {
+		if v.Before(now) {
+			delete(h.cache, k)
+		}
+	}
 }

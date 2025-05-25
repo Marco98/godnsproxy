@@ -42,13 +42,9 @@ func (h *Hook) Hook(resp *dns.Msg) {
 }
 
 func (h *Hook) Daemon() {
-	h.clientLock.Lock()
-	if c, err := h.getClient(); err == nil {
-		if _, err := c.Run("/ip/dns/cache/flush"); err != nil {
-			slog.Error("error flushing dns cache")
-		}
+	if _, err := h.runClient("/ip/dns/cache/flush"); err != nil {
+		slog.Error("error flushing dns cache")
 	}
-	h.clientLock.Unlock()
 	for {
 		h.updateMatchFqdns()
 		h.cachePurge()
@@ -57,19 +53,12 @@ func (h *Hook) Daemon() {
 }
 
 func (h *Hook) updateMatchFqdns() {
-	c, err := h.getClient()
-	if err != nil {
-		slog.Error("error getting client", "err", err)
-		return
-	}
-	h.clientLock.Lock()
-	resp, err := c.Run(
+	resp, err := h.runClient(
 		"/ip/firewall/filter/print",
 		"?disabled=false",
 		"?dst-address-list",
 		"=.proplist=dst-address-list",
 	)
-	h.clientLock.Unlock()
 	if err != nil {
 		slog.Error("error fetching rules", "err", err)
 		return
@@ -91,36 +80,45 @@ func (h *Hook) updateMatchFqdns() {
 	h.matchFqdns = fqdns
 }
 
-func (h *Hook) getClient() (*routeros.Client, error) {
-	if h.client != nil {
-		return h.client, nil
+func (h *Hook) runClient(sentences ...string) (*routeros.Reply, error) {
+	h.clientLock.Lock()
+	defer h.clientLock.Unlock()
+	if h.client == nil {
+		var err error
+		h.client, err = routeros.DialTimeout(h.Address, h.Username, h.Password, 3*time.Second)
+		if err != nil {
+			return nil, fmt.Errorf("error getting client: %w", err)
+		}
 	}
-	c, err := routeros.DialTimeout(h.Address, h.Username, h.Password, 3*time.Second)
-	if err != nil {
-		return nil, err
-	}
-	h.client = c
-	return c, nil
+	return h.client.Run(sentences...)
 }
 
 func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 	if h.cacheExists(name, ip) {
 		return false
 	}
-	if err := h.addAddressListRecord(name, ip, ttl); err != nil {
-		if strings.Contains(err.Error(), "already have such entry") {
-			if err := h.refreshAddressList(name, ip, ttl); err != nil {
-				if errors.Is(err, errRosAddressNotFound) {
-					if err := h.addAddressListRecord(name, ip, ttl); err != nil {
-						slog.Error("error adding rec", "err", err)
-					}
-				} else {
-					slog.Error("error refreshing rec", "err", err)
-				}
-			}
-		} else {
-			slog.Error("error adding rec", "err", err)
+	var err error
+	for range 3 {
+		err = h.addAddressListRecord(name, ip, ttl)
+		if err == nil {
+			break
 		}
+		if !strings.Contains(err.Error(), "already have such entry") {
+			slog.Error("error adding rec", "err", err)
+			return false
+		}
+		err = h.refreshAddressList(name, ip, ttl)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, errRosAddressNotFound) {
+			slog.Error("error refreshing rec", "err", err)
+			return false
+		}
+		time.Sleep(3 * time.Millisecond)
+	}
+	if err != nil {
+		slog.Error("error after 3 retries", "err", err)
 		return false
 	}
 	h.cacheSet(name, ip, ttl)
@@ -128,13 +126,7 @@ func (h *Hook) addAddressList(name, ip string, ttl uint) bool {
 }
 
 func (h *Hook) addAddressListRecord(name, ip string, ttl uint) error {
-	c, err := h.getClient()
-	if err != nil {
-		return fmt.Errorf("error getting client: %w", err)
-	}
-	h.clientLock.Lock()
-	defer h.clientLock.Unlock()
-	_, err = c.Run(
+	_, err := h.runClient(
 		"/ip/firewall/address-list/add",
 		"dynamic=yes",
 		fmt.Sprintf("=list=%s", name),
@@ -149,34 +141,29 @@ func (h *Hook) addAddressListRecord(name, ip string, ttl uint) error {
 }
 
 func (h *Hook) refreshAddressList(name, ip string, ttl uint) error {
-	c, err := h.getClient()
-	if err != nil {
-		return err
-	}
-	h.clientLock.Lock()
-	res, err := c.Run(
+	res, err := h.runClient(
 		"/ip/firewall/address-list/print",
 		fmt.Sprintf("?address=%s", ip),
 		fmt.Sprintf("?list=%s", name),
 		"?dynamic=yes",
 		"=.proplist=.id",
 	)
-	h.clientLock.Unlock()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed getting address-list: %w", err)
 	}
 	if len(res.Re) < 1 {
 		return errRosAddressNotFound
 	}
-	h.clientLock.Lock()
-	_, err = c.Run(
+	_, err = h.runClient(
 		"/ip/firewall/address-list/set",
 		fmt.Sprintf("=.id=%s", res.Re[0].Map[".id"]),
 		fmt.Sprintf("=timeout=%d", ttl),
 	)
-	h.clientLock.Unlock()
+	if err != nil {
+		return fmt.Errorf("failed setting address-list: %w", err)
+	}
 	slog.Debug("address-list record refreshed", "name", name, "ip", ip, "ttl", ttl)
-	return err
+	return nil
 }
 
 func (h *Hook) cacheExists(name, ip string) bool {

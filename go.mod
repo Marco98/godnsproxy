@@ -3,7 +3,6 @@ module github.com/Marco98/godnsproxy
 go 1.23.4
 
 require (
-	github.com/go-routeros/routeros/v3 v3.0.0
 	github.com/miekg/dns v1.1.62
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/net v0.32.0

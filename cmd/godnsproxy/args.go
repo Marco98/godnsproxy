@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"math"
 	"net"
-	"strconv"
 	"strings"
 )
 
@@ -21,6 +20,7 @@ type cli struct {
 	routerosAddress  string
 	routerosUsername string
 	routerosPassword string
+	insecure         bool
 }
 
 type config struct {
@@ -32,6 +32,7 @@ type config struct {
 	routerosAddress  string
 	routerosUsername string
 	routerosPassword string
+	insecure         bool
 }
 
 var logLevels = map[string]slog.Level{
@@ -49,9 +50,10 @@ func getCliParams() cli {
 	flag.UintVar(&cli.graceTTL, "gttl", 1, "grace ttl (default 1)")
 	flag.UintVar(&cli.propagateDelay, "pdel", 100, "propagate delay (ms)")
 	flag.StringVar(&cli.forwarders, "f", "", "comma-separated forwarders")
-	flag.StringVar(&cli.routerosAddress, "rosaddr", "", "routeros api address")
+	flag.StringVar(&cli.routerosAddress, "rosaddr", "", "routeros restapi address")
 	flag.StringVar(&cli.routerosUsername, "rosuser", "", "routeros username")
 	flag.StringVar(&cli.routerosPassword, "rospass", "", "routeros password")
+	flag.BoolVar(&cli.insecure, "insecure", false, "skip tls verification")
 	flag.Parse()
 	return cli
 }
@@ -85,24 +87,6 @@ func (cli cli) makeConfig() (config, bool) {
 		valid = false
 		slog.Error("listen port out of bounds (1-65535)", "arg", "p", "val", cli.port)
 	}
-	rosAddrSplit := strings.Split(cli.routerosAddress, ":")
-	if len(rosAddrSplit) == 2 {
-		if net.ParseIP(rosAddrSplit[0]) != nil {
-			rosAddrPort, err := strconv.ParseUint(rosAddrSplit[1], 10, 16)
-			if err == nil {
-				cfg.routerosAddress = fmt.Sprintf("%s:%d", rosAddrSplit[0], rosAddrPort)
-			} else {
-				valid = false
-				slog.Error("routeros address api port is not valid", "arg", "rosaddr", "val", cli.routerosAddress)
-			}
-		} else {
-			valid = false
-			slog.Error("routeros address ip address is not valid", "arg", "rosaddr", "val", cli.routerosAddress)
-		}
-	} else {
-		valid = false
-		slog.Error("routeros address + api port must be set", "arg", "rosaddr", "val", cli.routerosAddress)
-	}
 	if len(cli.routerosUsername) > 0 {
 		cfg.routerosUsername = cli.routerosUsername
 	} else {
@@ -122,7 +106,9 @@ func (cli cli) makeConfig() (config, bool) {
 			slog.Error("invalid ip address as forwarder", "arg", "f", "val", cli.forwarders)
 		}
 	}
+	cfg.routerosAddress = cli.routerosAddress
 	cfg.graceTTL = cli.graceTTL
 	cfg.propagateDelay = cli.propagateDelay
+	cfg.insecure = cli.insecure
 	return cfg, valid
 }
